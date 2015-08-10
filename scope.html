@@ -8,8 +8,9 @@
 <canvas style="border: solid 1px silver; display: block; position: absolute;" id="original" width="700" height="200"></canvas>
 <canvas style="border: solid 1px silver; display: block; position: absolute;" id="original-cursor" width="700" height="200"></canvas>
 </div>
-<div>
-<canvas style="border: solid 1px silver" id="resampled" width="700" height="200"></canvas>
+<div style="position: relative; height: 210px">
+<canvas style="border: solid 1px silver; display: block; position: absolute;" id="resampled" width="700" height="200"></canvas>
+<canvas style="border: solid 1px silver; display: block; position: absolute;" id="resampled-cursor" width="700" height="200"></canvas>
 </div>
 
 
@@ -18,13 +19,14 @@
 <script>
 
 // weg damit. ist zum spielen mit dem cursor da
-var currentTrace;
+var currentTrace, reCurrentTrace;
 
 function viewCodesysTrace(doc) {
     console.time("parse trace xml");
     var data1 = TraceData.fromCodesysTrace(doc, 0);
     console.timeEnd("parse trace xml");
 console.log(data1.length);
+    var data2 = TraceData.fromCodesysTrace(doc, 1);
 
     var origCanvas = document.getElementById("original");
     var reCanvas = document.getElementById("resampled");
@@ -40,6 +42,8 @@ console.log(data1.length);
     console.timeEnd("draw");
 
     var re1 = data1.resample(1000);
+    re1=data2;
+    reCurrentTrace = re1;
 
     console.time("draw re");
     re1.draw(reCanvas.getContext("2d"), reCanvas.width, reCanvas.height, "purple");
@@ -90,16 +94,22 @@ t.addEventListener("drop", drop);
 
 <script>
 var cursorCanvas = document.getElementById("original-cursor");
+var reCursorCanvas = document.getElementById("resampled-cursor");
 
 var cursorX = -1;
 var cursorRequestId = 0;
 
-function drawCursor() {
+function drawCursors() {
     cursorRequestId = 0;
 
-    var ctx = cursorCanvas.getContext("2d");
-    var width = cursorCanvas.width;
-    var height = cursorCanvas.height;
+    drawCursor(cursorCanvas, currentTrace);
+    drawCursor(reCursorCanvas, reCurrentTrace);
+}
+
+function drawCursor(canvas, trace) {
+    var ctx = canvas.getContext("2d");
+    var width = canvas.width;
+    var height = canvas.height;
 
     ctx.save();
     ctx.clearRect(0, 0, width, height);
@@ -116,15 +126,15 @@ function drawCursor() {
     width -= 3;
     height -= 3;
 
-    var timestamp = cursorX * currentTrace.duration / (width - 1) + currentTrace.timestamps[0];
+    var timestamp = cursorX * trace.duration / (width - 1) + trace.timestamps[0];
 
-    var index = currentTrace.findTimestampIndex(timestamp);
+    var index = trace.findTimestampIndex(timestamp);
     if (index < 0) {
         index = 0;
     }
 
-    var vX = (currentTrace.timestamps[index] - currentTrace.timestamps[0]) / currentTrace.duration * (width - 1) + 1.5;
-    var vY = (height - 1) - Math.round((currentTrace.values[index] - currentTrace.minValue) * (height - 1) / (currentTrace.maxValue - currentTrace.minValue)) + 1.5;
+    var vX = (trace.timestamps[index] - trace.timestamps[0]) / trace.duration * (width - 1) + 1.5;
+    var vY = (height - 1) - Math.round((trace.values[index] - trace.minValue) * (height - 1) / (trace.maxValue - trace.minValue)) + 1.5;
 
     //ctx.beginPath();
     //ctx.arc(vX, vY, 3.5, 0, 2 * Math.PI);
@@ -135,7 +145,7 @@ function drawCursor() {
 
     ctx.textBaseline = "middle";
     ctx.font = "12px sans-serif";
-    var text = currentTrace.values[index];
+    var text = trace.values[index];
     var textWidth = ctx.measureText(text).width;
 
     ctx.beginPath();
@@ -173,7 +183,7 @@ cursorCanvas.addEventListener("mousemove", function (e) {
     cursorX = x;
 
     if (cursorRequestId == 0) {
-        cursorRequestId = requestAnimationFrame(drawCursor);
+        cursorRequestId = requestAnimationFrame(drawCursors);
     }
 });
 
