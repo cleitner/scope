@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+
+<meta charset="UTF-8">
+
+<title>Scope</title>
+
+<div id="scope" style="position: relative; height: 210px">
+<canvas style="border: solid 1px silver; display: block; position: absolute;" id="original" width="700" height="200"></canvas>
+<canvas style="border: solid 1px silver; display: block; position: absolute;" id="original-cursor" width="700" height="200"></canvas>
+</div>
+<div>
+<canvas style="border: solid 1px silver" id="resampled" width="700" height="200"></canvas>
+</div>
+
+
+<script src="js/trace.js"></script>
+
+<script>
+
+// weg damit. ist zum spielen mit dem cursor da
+var currentTrace;
+
+function viewCodesysTrace(doc) {
+    console.time("parse trace xml");
+    var data1 = TraceData.fromCodesysTrace(doc, 0);
+    console.timeEnd("parse trace xml");
+console.log(data1.length);
+
+    var origCanvas = document.getElementById("original");
+    var reCanvas = document.getElementById("resampled");
+
+    // Add 2 peaks, which we care about
+    data1.values[Math.floor(data1.length / 10)] = data1.maxValue;
+    data1.values[Math.floor(9 * data1.length / 10)] = data1.minValue;
+
+    currentTrace = data1;
+
+    console.time("draw");
+    data1.draw(origCanvas.getContext("2d"), origCanvas.width, origCanvas.height, "teal");
+    console.timeEnd("draw");
+
+    var re1 = data1.resample(1000);
+
+    console.time("draw re");
+    re1.draw(reCanvas.getContext("2d"), reCanvas.width, reCanvas.height, "purple");
+    console.timeEnd("draw re");
+}
+
+function loadCodesysTrace(name) {
+    var xhr = new XMLHttpRequest();
+    xhr.addEventListener("load", function () {
+        viewCodesysTrace(xhr.responseXML);
+    });
+    xhr.open("GET", name);
+    xhr.send();
+}
+
+loadCodesysTrace("data/test2.trace");
+</script>
+
+<script>
+
+function cancel(e) {
+    e.preventDefault();
+    return false;
+}
+
+function drop(e) {
+    e.preventDefault();
+
+    var file = e.dataTransfer.files[0];
+    var reader = new FileReader();
+    reader.addEventListener("load", function (e) {
+        var doc = new DOMParser().parseFromString(this.result, "text/xml");
+        viewCodesysTrace(doc);
+    });
+    reader.readAsText(file);
+
+    return false;
+}
+
+var t = document.getElementById("scope");
+
+t.addEventListener("dragenter", cancel);
+t.addEventListener("dragover", cancel);
+t.addEventListener("drop", drop);
+
+</script>
+
+<script>
+var cursorCanvas = document.getElementById("original-cursor");
+
+var cursorX = -1;
+var cursorRequestId = 0;
+
+function drawCursor() {
+    cursorRequestId = 0;
+
+    var ctx = cursorCanvas.getContext("2d");
+    var width = cursorCanvas.width;
+    var height = cursorCanvas.height;
+
+    ctx.save();
+    ctx.clearRect(0, 0, width, height);
+
+    ctx.setLineDash([1, 1]);
+
+    ctx.beginPath();
+    ctx.moveTo(0.5 + cursorX, 0);
+    ctx.lineTo(0.5 + cursorX, height);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+
+    width -= 3;
+    height -= 3;
+
+    var timestamp = cursorX * currentTrace.duration / (width - 1) + currentTrace.timestamps[0];
+
+    var index = currentTrace.findTimestampIndex(timestamp);
+    if (index < 0) {
+        index = 0;
+    }
+
+    var vX = (currentTrace.timestamps[index] - currentTrace.timestamps[0]) / currentTrace.duration * (width - 1) + 1.5;
+    var vY = (height - 1) - Math.round((currentTrace.values[index] - currentTrace.minValue) * (height - 1) / (currentTrace.maxValue - currentTrace.minValue)) + 1.5;
+
+    //ctx.beginPath();
+    //ctx.arc(vX, vY, 3.5, 0, 2 * Math.PI);
+    //ctx.stroke();
+
+    vX = Math.round(vX) + 3;
+    vY += 0.5;
+
+    ctx.textBaseline = "middle";
+    ctx.font = "12px sans-serif";
+    var text = currentTrace.values[index];
+    var textWidth = ctx.measureText(text).width;
+
+    ctx.beginPath();
+    ctx.moveTo(vX, vY);
+    ctx.lineTo(vX + 3, vY - 3);
+    ctx.lineTo(vX + 3, vY - 8);
+    ctx.lineTo(vX + 5, vY - 10);
+    ctx.lineTo(vX + 10 + textWidth, vY - 10);
+    ctx.lineTo(vX + 10 + textWidth + 2, vY - 8);
+    ctx.lineTo(vX + 10 + textWidth + 2, vY + 8);
+    ctx.lineTo(vX + 10 + textWidth, vY + 10);
+    ctx.lineTo(vX + 5, vY + 10);
+    ctx.lineTo(vX + 3, vY + 8);
+    ctx.lineTo(vX + 3, vY + 3);
+    ctx.closePath();
+
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "white";
+    ctx.stroke();
+    ctx.fill();
+
+    ctx.fillStyle = "white";
+    ctx.fillText(text, vX + 8, vY);
+
+    ctx.restore();
+}
+
+cursorCanvas.addEventListener("mousemove", function (e) {
+    var x = e.offsetX;
+
+    if (x == cursorX) {
+        return;
+    }
+    cursorX = x;
+
+    if (cursorRequestId == 0) {
+        cursorRequestId = requestAnimationFrame(drawCursor);
+    }
+});
+
+</script>
+
