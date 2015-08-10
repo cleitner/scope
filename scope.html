@@ -51,6 +51,7 @@ function loadCodesysTrace(name) {
     xhr.addEventListener("load", function () {
         viewCodesysTrace(xhr.responseXML);
     });
+    xhr.overrideMimeType("text/xml");
     xhr.open("GET", name);
     xhr.send();
 }
