@@ -18,7 +18,9 @@ function TraceData(name, timestamps, values)
     this.timestamps = timestamps;
     this.values = values;
 
-    this.duration = timestamps[length - 1] - timestamps[0];
+    this.minTimestamp = timestamps[0];
+    this.maxTimestamp = timestamps[length - 1];
+    this.duration = this.maxTimestamp - this.minTimestamp;
 
     var min = Infinity, max = -Infinity;
 
@@ -101,8 +103,8 @@ TraceData.prototype.resample = function (targetLength, lowerTimestamp, upperTime
     var timestamps = this.timestamps;
     var values = this.values;
 
-    lowerTimestamp = lowerTimestamp || timestamps[0];
-    upperTimestamp = upperTimestamp || timestamps[length - 1];
+    lowerTimestamp = lowerTimestamp || this.minTimestamp;
+    upperTimestamp = upperTimestamp || this.maxTimestamp;
 
     /* Step 1: find the bounding sample indices */
     var lowerIndex = this.findTimestampIndex(lowerTimestamp);
@@ -174,9 +176,12 @@ TraceData.prototype.resample = function (targetLength, lowerTimestamp, upperTime
     return new TraceData(this.name, newTimestamps, newValues);
 };
 
-TraceData.prototype.draw = function (ctx, width, height, color)
+TraceData.prototype.draw = function (ctx, width, height, color, lowerTimestamp, upperTimestamp)
 {
     var data = this;
+
+    lowerTimestamp = lowerTimestamp || data.minTimestamp;
+    upperTimestamp = upperTimestamp || data.maxTimestamp;
 
     ctx.save();
     ctx.clearRect(0, 0, width, height);
@@ -201,7 +206,7 @@ TraceData.prototype.draw = function (ctx, width, height, color)
     var timestamps = data.timestamps;
     var values = data.values;
 
-    var sx = width / data.duration;
+    var sx = width / (upperTimestamp - lowerTimestamp);
     var ty, sy;
     if (data.maxValue - data.minValue == 0) {
         ty = height / 2;
@@ -211,16 +216,24 @@ TraceData.prototype.draw = function (ctx, width, height, color)
         sy = height / (data.maxValue - data.minValue);
     }
 
-    var minTimestamp = timestamps[0];
-    var minValue = data.minValue;
+    var lowerIndex = this.findTimestampIndex(lowerTimestamp);
+    var upperIndex = this.findTimestampIndex(upperTimestamp);
 
+    if (lowerIndex < 0) {
+        lowerIndex = 0;
+    }
+    if ((upperIndex < (length - 1)) && (timestamps[upperIndex] < upperTimestamp)) {
+        upperIndex += 1;
+    }
+
+    var minValue = data.minValue;
 
     // Draw the line
     ctx.beginPath();
-    ctx.moveTo(0, ty - sy * (values[0] - minValue));
-    for (var n = 0; n < data.length; n++) {
+    ctx.moveTo(sx * (timestamps[n] - lowerTimestamp), ty - sy * (values[lowerIndex] - minValue));
+    for (var n = lowerIndex; n <= upperIndex; n++) {
         ctx.lineTo(
-            sx * (timestamps[n] - minTimestamp),
+            sx * (timestamps[n] - lowerTimestamp),
             Math.round(ty - sy * (values[n] - minValue)));
     }
     ctx.strokeStyle = color;
@@ -259,10 +272,10 @@ TraceData.prototype.draw = function (ctx, width, height, color)
     }
     ctx.fill();
 */
-    for (var n = 0; n < data.length; n++) {
+    for (var n = lowerIndex; n <= upperIndex; n++) {
         var x, y;
 
-        x = sx * (timestamps[n] - minTimestamp);
+        x = sx * (timestamps[n] - lowerTimestamp);
         y = Math.round(ty - sy * (values[n] - minValue));
 
         ctx.fillRect(x - radius, y - radius, 2 * radius, 2 * radius);

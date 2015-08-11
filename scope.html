@@ -36,6 +36,7 @@ console.log(data1.length);
     data1.values[Math.floor(9 * data1.length / 10)] = data1.minValue;
 
     currentTrace = data1;
+console.log(data1.minTimestamp, data1.maxTimestamp);
 
     console.time("draw");
     data1.draw(origCanvas.getContext("2d"), origCanvas.width, origCanvas.height, "teal");
