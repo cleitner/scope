@@ -6,7 +6,7 @@
 
 <div id="scope" style="position: relative; height: 210px">
 <canvas style="border: solid 1px silver; display: block; position: absolute;" id="original" width="700" height="200"></canvas>
-<canvas style="border: solid 1px silver; display: block; position: absolute;" id="original-cursor" width="700" height="200"></canvas>
+<canvas style="border: solid 1px silver; display: block; position: absolute;" id="original-cursor" width="700" height="200" draggable="false"></canvas>
 </div>
 <div style="position: relative; height: 210px">
 <canvas style="border: solid 1px silver; display: block; position: absolute;" id="resampled" width="700" height="200"></canvas>
@@ -21,33 +21,44 @@
 // weg damit. ist zum spielen mit dem cursor da
 var currentTrace, reCurrentTrace;
 
+var origCanvas = document.getElementById("original");
+var reCanvas = document.getElementById("resampled");
+
+var lowerT, upperT;
+
+function redraw()
+{
+    console.time("draw");
+    currentTrace.draw(origCanvas.getContext("2d"), origCanvas.width, origCanvas.height, "teal", lowerT, upperT);
+    console.timeEnd("draw");
+}
+
 function viewCodesysTrace(doc) {
     console.time("parse trace xml");
     var data1 = TraceData.fromCodesysTrace(doc, 0);
     console.timeEnd("parse trace xml");
-console.log(data1.length);
     var data2 = TraceData.fromCodesysTrace(doc, 1);
 
-    var origCanvas = document.getElementById("original");
-    var reCanvas = document.getElementById("resampled");
+    console.log(data1.length);
+    console.log(data1.minTimestamp, data1.maxTimestamp);
+
+    lowerT = data1.minTimestamp;
+    upperT = data1.maxTimestamp;
 
     // Add 2 peaks, which we care about
     data1.values[Math.floor(data1.length / 10)] = data1.maxValue;
     data1.values[Math.floor(9 * data1.length / 10)] = data1.minValue;
 
     currentTrace = data1;
-console.log(data1.minTimestamp, data1.maxTimestamp);
-
-    console.time("draw");
-    data1.draw(origCanvas.getContext("2d"), origCanvas.width, origCanvas.height, "teal");
-    console.timeEnd("draw");
 
     var re1 = data1.resample(1000);
     re1=data2;
     reCurrentTrace = re1;
 
+    redraw();
+
     console.time("draw re");
-    re1.draw(reCanvas.getContext("2d"), reCanvas.width, reCanvas.height, "purple");
+    reCurrentTrace.draw(reCanvas.getContext("2d"), reCanvas.width, reCanvas.height, "purple");
     console.timeEnd("draw re");
 }
 
@@ -103,11 +114,11 @@ var cursorRequestId = 0;
 function drawCursors() {
     cursorRequestId = 0;
 
-    drawCursor(cursorCanvas, currentTrace);
-    drawCursor(reCursorCanvas, reCurrentTrace);
+    drawCursor(cursorCanvas, currentTrace, lowerT, upperT);
+    drawCursor(reCursorCanvas, reCurrentTrace, reCurrentTrace.minTimestamp, reCurrentTrace.maxTimestamp);
 }
 
-function drawCursor(canvas, trace) {
+function drawCursor(canvas, trace, lT, uT) {
     var ctx = canvas.getContext("2d");
     var width = canvas.width;
     var height = canvas.height;
@@ -127,14 +138,16 @@ function drawCursor(canvas, trace) {
     width -= 3;
     height -= 3;
 
-    var timestamp = cursorX * trace.duration / (width - 1) + trace.timestamps[0];
+    var duration = uT - lT;
+
+    var timestamp = cursorX * duration / (width - 1) + lT;
 
     var index = trace.findTimestampIndex(timestamp);
     if (index < 0) {
         index = 0;
     }
 
-    var vX = (trace.timestamps[index] - trace.timestamps[0]) / trace.duration * (width - 1) + 1.5;
+    var vX = (trace.timestamps[index] - lT) / duration * (width - 1) + 1.5;
     var vY = (height - 1) - Math.round((trace.values[index] - trace.minValue) * (height - 1) / (trace.maxValue - trace.minValue)) + 1.5;
 
     //ctx.beginPath();
@@ -178,13 +191,12 @@ function drawCursor(canvas, trace) {
 cursorCanvas.addEventListener("mousemove", function (e) {
     var x = e.offsetX;
 
-    if (x == cursorX) {
-        return;
-    }
-    cursorX = x;
+    if (x != cursorX) {
+        cursorX = x;
 
-    if (cursorRequestId == 0) {
-        cursorRequestId = requestAnimationFrame(drawCursors);
+        if (cursorRequestId == 0) {
+            cursorRequestId = requestAnimationFrame(drawCursors);
+        }
     }
 });
 
