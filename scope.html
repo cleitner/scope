@@ -51,8 +51,8 @@ function viewCodesysTrace(doc) {
 
     currentTrace = data1;
 
-    var re1 = data1.resample(1000);
-    re1=data2;
+    var re1 = data1.resample(Math.floor(data1.length * 0.1));
+    //re1=data2;
     reCurrentTrace = re1;
 
     redraw();

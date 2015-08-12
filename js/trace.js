@@ -99,10 +99,6 @@ TraceData.prototype.findTimestampIndex = function (t)
  */
 TraceData.prototype.resample = function (targetLength, lowerTimestamp, upperTimestamp) {
 
-    var length = this.length;
-    var timestamps = this.timestamps;
-    var values = this.values;
-
     lowerTimestamp = lowerTimestamp || this.minTimestamp;
     upperTimestamp = upperTimestamp || this.maxTimestamp;
 
@@ -114,63 +110,31 @@ TraceData.prototype.resample = function (targetLength, lowerTimestamp, upperTime
         lowerIndex = 0;
     }
 
-    var duration = timestamps[upperIndex] - timestamps[lowerIndex];
+    var values = this.values.slice(lowerIndex, upperIndex);
+    var timestamps = this.timestamps.slice(lowerIndex, upperIndex);
 
-    // The timespan that the target length is supposed to distinguish. All
-    // samples inside this timespan are averaged, unless the value delta
-    // exceeds 10%
-    var minTimespan = duration / targetLength;
+    var newTimestamps = [];
+    var newValues = [];
 
-    // TODO: Here be magic :)
+    function absoluteDifference(a, b) {
+        return (a > b) ? a - b : b - a;
+    }
 
-    // TODO: count how many samples there will be
-    var newLength = 0;
-    // TODO: alloc timestamps/values
-    // TODO: calculate new timestamps and values
+    var tolerance = 0.1 * absoluteDifference(Math.min.apply(null, values), Math.max.apply(null, values));
 
-    // TODO: return new TraceData
-    return this;
+    var peaks = new Array(values.length);
+    peaks[0] = 0;
+    for (var i = 1; i < values.length; i++) {
+        peaks[i] = absoluteDifference(values[i], values[i - 1]) > tolerance ? true : false;
+    }
 
-    // Crap follows
+    var gap = Math.floor(values.length / targetLength);
 
-    var newTimestamps = new Float64Array(newLength);
-    var newValues = new Float64Array(newLength);
-
-    var s = 0;
-    for (var n = 0; n < newLength; n++) {
-        newTimestamps[n] = n * duration / (newLength - 1) + timestamps[0];
-
-        var lT;
-        if (n > 0) {
-            lT = (n - 0.5) * duration / (newLength - 1) + timestamps[0];
-        } else {
-            lT = timestamps[0];
+    for (var i = 0; i < values.length; i++) {
+        if (peaks[i] | i % gap == 0) {
+            newValues.push(values[i]);
+            newTimestamps.push(timestamps[i]);
         }
-        var uT;
-        if (n != (newLength - 1)) {
-            uT = (n + 0.5) * duration / (newLength - 1) + timestamps[0];
-        } else {
-            uT = timestamps[length - 1];
-        }
-        var dT = uT - lT;
-
-        var lV = values[s] + (lT - timestamps[s]) * (values[s + 1] - values[s]) / (timestamps[s + 1] - timestamps[s]);
-
-        var area = 0;
-        while ((s < length - 2) && (timestamps[s + 1] < uT)) {
-            area += (lV + values[s + 1]) / 2 * (timestamps[s + 1] - lT);
-
-            lV = values[s];
-            lT = timestamps[s];
-
-            s += 1;
-        }
-
-        var uV = values[s] + (uT - timestamps[s]) * (values[s + 1] - values[s]) / (timestamps[s + 1] - timestamps[s]);
-
-        area += (lV + uV) / 2 * (uT - lT);
-
-        newValues[n] = area / dT;
     }
 
     return new TraceData(this.name, newTimestamps, newValues);
