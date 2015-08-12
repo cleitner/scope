@@ -102,7 +102,6 @@ TraceData.prototype.resample = function (targetLength, lowerTimestamp, upperTime
     lowerTimestamp = lowerTimestamp || this.minTimestamp;
     upperTimestamp = upperTimestamp || this.maxTimestamp;
 
-    /* Step 1: find the bounding sample indices */
     var lowerIndex = this.findTimestampIndex(lowerTimestamp);
     var upperIndex = this.findTimestampIndex(upperTimestamp);
 
@@ -110,30 +109,36 @@ TraceData.prototype.resample = function (targetLength, lowerTimestamp, upperTime
         lowerIndex = 0;
     }
 
-    var values = this.values.slice(lowerIndex, upperIndex);
-    var timestamps = this.timestamps.slice(lowerIndex, upperIndex);
+    var values = this.values;
+    var timestamps = this.timestamps;
 
-    var newTimestamps = [];
-    var newValues = [];
+    var gap = Math.floor((upperIndex - lowerIndex) / targetLength);
 
-    function absoluteDifference(a, b) {
-        return (a > b) ? a - b : b - a;
+    var minValue = Infinity, maxValue = -Infinity;
+    for (var n = lowerIndex; n <= upperIndex; n++) {
+        if (values[n] < minValue) { minValue = values[n]; }
+        if (values[n] > maxValue) { maxValue = values[n]; }
     }
 
-    var tolerance = 0.1 * absoluteDifference(Math.min.apply(null, values), Math.max.apply(null, values));
+    var tolerance = 0.1 * Math.abs(maxValue - minValue);
 
-    var peaks = new Array(values.length);
-    peaks[0] = 0;
-    for (var i = 1; i < values.length; i++) {
-        peaks[i] = absoluteDifference(values[i], values[i - 1]) > tolerance ? true : false;
+    var newLength = 0;
+    for (var n = lowerIndex; n <= upperIndex; n++) {
+        if ((Math.abs(values[n] - values[n - 1]) > tolerance)
+                || (((n - lowerIndex) % gap) == 0)) {
+            newLength += 1;
+        }
     }
 
-    var gap = Math.floor(values.length / targetLength);
-
-    for (var i = 0; i < values.length; i++) {
-        if (peaks[i] | i % gap == 0) {
-            newValues.push(values[i]);
-            newTimestamps.push(timestamps[i]);
+    var newTimestamps = new Float64Array(newLength);
+    var newValues = new Float64Array(newLength);
+    var i = 0;
+    for (var n = lowerIndex; n <= upperIndex; n++) {
+        if ((Math.abs(values[n] - values[n - 1]) > tolerance)
+                || (((n - lowerIndex) % gap) == 0)) {
+            newValues[i] = values[n];
+            newTimestamps[i] = timestamps[n];
+            i += 1;
         }
     }
 
